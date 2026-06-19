@@ -1,6 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { userRoutes } from "@/modules/users/presentation/UserRoutes";
-import { productRoutes } from "@/modules/products/presentation/ProductRoutes";
+import { createUserModule } from "@/modules/users";
+import { createProductModule } from "@/modules/products";
 import { loggerMiddleware } from "@/shared/presentation/LoggerMiddleware";
 
 const app = new OpenAPIHono();
@@ -14,6 +14,9 @@ app.get("/", (c) => {
 });
 
 // Mount modular Bounded Contexts
+const { userRoutes } = createUserModule();
+const { productRoutes } = createProductModule();
+
 app.route("/users", userRoutes);
 app.route("/products", productRoutes);
 
