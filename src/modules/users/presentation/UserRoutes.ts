@@ -1,8 +1,12 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { CreateUserUseCase } from "@/modules/users/application/CreateUserUseCase";
+import { GetAllUsersUseCase } from "@/modules/users/application/GetAllUsersUseCase";
+import { GetUserByIdUseCase } from "@/modules/users/application/GetUserByIdUseCase";
 
 export interface UserRoutesDependencies {
   createUserUseCase: CreateUserUseCase;
+  getAllUsersUseCase: GetAllUsersUseCase;
+  getUserByIdUseCase: GetUserByIdUseCase;
 }
 
 export function createUserRoutes(deps: UserRoutesDependencies): OpenAPIHono {
@@ -57,7 +61,58 @@ export function createUserRoutes(deps: UserRoutesDependencies): OpenAPIHono {
     },
   });
 
-  // Implement the route handler
+  const getAllUsersRoute = createRoute({
+    method: "get",
+    path: "/",
+    responses: {
+      200: {
+        content: {
+          "application/json": {
+            schema: z.array(UserResponseSchema),
+          },
+        },
+        description: "List of users",
+      },
+      400: {
+        content: {
+          "application/json": {
+            schema: ErrorResponseSchema,
+          },
+        },
+        description: "Error",
+      },
+    },
+  });
+
+  const getUserByIdRoute = createRoute({
+    method: "get",
+    path: "/:id",
+    request: {
+      params: z.object({
+        id: z.string().openapi({ example: "abc123xyz" }),
+      }),
+    },
+    responses: {
+      200: {
+        content: {
+          "application/json": {
+            schema: UserResponseSchema,
+          },
+        },
+        description: "User found",
+      },
+      404: {
+        content: {
+          "application/json": {
+            schema: ErrorResponseSchema,
+          },
+        },
+        description: "User not found",
+      },
+    },
+  });
+
+  // Implement the route handlers
   userRoutes.openapi(createUserRoute, async (c) => {
     const body = c.req.valid("json");
 
@@ -79,6 +134,46 @@ export function createUserRoutes(deps: UserRoutesDependencies): OpenAPIHono {
         email: user.email.value,
       },
       201
+    );
+  });
+
+  userRoutes.openapi(getAllUsersRoute, async (c) => {
+    const result = await deps.getAllUsersUseCase.execute();
+
+    if (result.isLeft()) {
+      return c.json({ error: result.value }, 400);
+    }
+
+    const users = result.value.getValue();
+
+    return c.json(
+      users.map((user) => ({
+        id: user.id.toString(),
+        name: user.name,
+        email: user.email.value,
+      })),
+      200
+    );
+  });
+
+  userRoutes.openapi(getUserByIdRoute, async (c) => {
+    const { id } = c.req.valid("param");
+
+    const result = await deps.getUserByIdUseCase.execute({ id });
+
+    if (result.isLeft()) {
+      return c.json({ error: result.value }, 404);
+    }
+
+    const user = result.value.getValue();
+
+    return c.json(
+      {
+        id: user.id.toString(),
+        name: user.name,
+        email: user.email.value,
+      },
+      200
     );
   });
 
