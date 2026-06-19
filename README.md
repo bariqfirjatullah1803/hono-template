@@ -30,7 +30,9 @@ src/
 │       │   └── InMemoryUserRepository.ts # Implementasi database/state
 │       │
 │       └── presentation/     # LAYER 4: Interface / Routing HTTP
-│           └── UserRoutes.ts # Hono Routes & Zod OpenAPI schema
+│           └── UserRoutes.ts # Hono Routes factory (menerima use case)
+│
+│       └── index.ts          # Composition Root: wiring repository, use case, dan routes
 │
 ├── shared/                   # Komponen Reusable Lintas Modul
 │   ├── domain/               # DDD Primitives (Entity, ValueObject, Result)
@@ -63,6 +65,11 @@ Untuk menjaga agar monolith ini mudah dipotong menjadi microservices kelak, patu
 
 4. **Presentation Layer (`presentation/`):**
    - Menangani protokol HTTP (Hono Framework), routing, autentikasi middleware, serta validasi skema input body/query menggunakan Zod OpenAPI.
+   - **Tidak boleh langsung mengimport infrastructure**. Route dibuat lewat factory function yang menerima use case dari luar.
+
+5. **Composition Root (`modules/<name>/index.ts`):**
+   - Tempat satu-satunya yang menyusun dependency: membuat repository, use case, dan route.
+   - Ini menjadi *public API* dari modul, sehingga modul lain hanya mengimport dari file ini.
 
 ---
 
@@ -73,8 +80,9 @@ Jika Anda ingin menambah konteks bisnis baru (misal: `products` atau `orders`):
 2. Definisikan Entity dan Value Object di `domain/`.
 3. Buat Use Case di `application/`.
 4. Implementasikan database adapter di `infrastructure/`.
-5. Buat HTTP endpoint di `presentation/ProductRoutes.ts`.
-6. Daftarkan routes baru tersebut ke dalam `src/index.ts` menggunakan `app.route('/products', productRoutes)`.
+5. Buat HTTP endpoint factory di `presentation/ProductRoutes.ts` (menerima use case lewat dependency).
+6. Buat Composition Root di `src/modules/products/index.ts` untuk menyusun repository, use case, dan routes.
+7. Daftarkan modul baru ke dalam `src/index.ts` menggunakan `const { productRoutes } = createProductModule(); app.route('/products', productRoutes);`.
 
 ---
 
@@ -101,4 +109,5 @@ GET http://localhost:8787/doc
 ## 🎯 Mengapa Arsitektur ini Mudah Migrasi ke Microservices?
 
 1. **Database Isolation:** Setiap modul hanya berinteraksi dengan database-nya sendiri lewat implementasi Repository-nya. Tidak ada *JOIN SQL* lintas modul di dalam kode. Jika modul `users` perlu data dari modul `orders`, komunikasinya harus lewat Use Case atau Event, bukan query langsung.
-2. **Clear Boundaries:** Karena folder `users` sepenuhnya mandiri, saat migrasi ke microservices, Anda cukup memindahkan folder `src/modules/users` ke repositori baru, menyesuaikan `presentation layer`-nya, dan sistem baru Anda siap berjalan secara terdistribusi tanpa merusak modul lainnya.
+2. **Clear Boundaries:** Hanya file `src/modules/<name>/index.ts` yang boleh diimport oleh modul lain. Isi folder `domain`, `application`, `infrastructure`, dan `presentation` tetap tertutup di dalam modul.
+3. **Composition Root per Modul:** Wiring dependency (repository → use case → route) dilakukan di `index.ts` modul. Saat migrasi ke microservices, Anda cukup memindahkan folder `src/modules/users` ke repositori baru, mengganti `presentation layer`-nya (misal HTTP/gRPC client), dan sistem baru siap berjalan secara terdistribusi tanpa merusak modul lainnya.
